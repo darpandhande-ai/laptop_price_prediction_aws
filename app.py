@@ -1,236 +1,313 @@
+import os
 import pickle
 import numpy as np
+import pandas as pd
 from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# Load the pickle decision tree model
-MODEL_PATH = "decision_model_.pkl"
+# Path to your pickled model
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "decision_model.pkl")
 
-try:
-    with open(MODEL_PATH, "rb") as file:
-        model = pickle.load(file)
-except Exception as e:
-    model = None
-    print(f"Error loading model: {e}")
+# Load model safely
+model = None
+if os.path.exists(MODEL_PATH):
+    with open(MODEL_PATH, "rb") as f:
+        model = pickle.load(f)
 
+# Features expected by decision_model.pkl
+FEATURE_NAMES = ["Age", "Gender", "Region", "Occupation", "Income"]
 
-# HTML, CSS (with Animations), and JS in a single template string
+# Categorical mapping options (Adjust labels if your preprocessor uses specific encodings)
+CATEGORICAL_OPTIONS = {
+    "Gender": ["Male", "Female", "Other"],
+    "Region": ["Urban", "Suburban", "Rural"],
+    "Occupation": ["Professional", "Management", "Skilled", "Student", "Unemployed"]
+}
+
+# Embedded HTML Template with Glassmorphic modern dark styling
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Decision Predictor</title>
-    <!-- Animate.css for smooth entrance animations -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <title>Decision Predictor App</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --border-glow: rgba(99, 102, 241, 0.25);
+            --accent-primary: #6366f1;
+            --accent-hover: #4f46e5;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --input-bg: rgba(15, 23, 42, 0.6);
+        }
+
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
         }
 
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-gradient);
+            color: var(--text-primary);
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            padding: 2rem 1rem;
         }
 
-        .card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 40px;
+        .container {
             width: 100%;
-            max-width: 500px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
-            transition: transform 0.3s ease;
+            max-width: 650px;
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 24px;
+            border: 1px solid var(--border-glow);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            padding: 2.5rem;
         }
 
-        .card:hover {
-            transform: translateY(-5px);
-        }
-
-        h2 {
-            color: #333;
+        .header {
             text-align: center;
-            margin-bottom: 25px;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 1.85rem;
             font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
         }
 
-        .form-group {
-            margin-bottom: 20px;
-            position: relative;
+        .header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
         }
 
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #555;
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 500px) {
+            .form-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .full-width {
+                grid-column: span 2;
+            }
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .input-group label {
+            font-size: 0.85rem;
             font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.02em;
+        }
+
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 0.85rem 1rem;
+            background-color: var(--input-bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 1rem;
+            background-color: var(--accent-primary);
+            color: #ffffff;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
+        }
+
+        .submit-btn:hover {
+            background-color: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .result-card {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            border-radius: 16px;
+            text-align: center;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .result-card h3 {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 0.3rem;
+        }
+
+        .result-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #818cf8;
+            text-transform: capitalize;
+        }
+
+        .error-card {
+            margin-top: 2rem;
+            padding: 1.25rem;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+            border-radius: 12px;
+            text-align: center;
             font-size: 0.9rem;
         }
 
-        input, select {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            outline: none;
-            background: #f9f9f9;
-        }
-
-        input:focus, select:focus {
-            border-color: #667eea;
-            background: #fff;
-            box-shadow: 0 0 8px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn-submit {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            border-radius: 10px;
-            color: white;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(118, 75, 162, 0.4);
-        }
-
-        .btn-submit:hover {
-            opacity: 0.95;
-            transform: scale(1.02);
-            box-shadow: 0 8px 20px rgba(118, 75, 162, 0.6);
-        }
-
-        .btn-submit:active {
-            transform: scale(0.98);
-        }
-
-        .result-box {
-            margin-top: 25px;
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            font-size: 1.2rem;
-            font-weight: 700;
-        }
-
-        .result-yes {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .result-no {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        /* Pulse glow for prediction result */
-        @keyframes pulseGlow {
-            0% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(102, 126, 234, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
-        }
-
-        .pulse {
-            animation: pulseGlow 1.5s infinite;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
 <body>
-
-<div class="card animate__animated animate__fadeInDown">
-    <h2>🎯 Model Predictor</h2>
-
-    <form action="/predict" method="POST">
-        <div class="form-group">
-            <label for="age">Age</label>
-            <input type="number" id="age" name="age" placeholder="e.g. 25" required value="{{ form_data.get('age', '') }}">
+    <div class="container">
+        <div class="header">
+            <h1>Decision Classifier</h1>
+            <p>Fill in the criteria below to generate a model prediction</p>
         </div>
 
-        <div class="form-group">
-            <label for="gender">Gender</label>
-            <select id="gender" name="gender" required>
-                <option value="" disabled {% if not form_data.get('gender') %}selected{% endif %}>Select Gender</option>
-                <option value="0" {% if form_data.get('gender') == '0' %}selected{% endif %}>Female (0)</option>
-                <option value="1" {% if form_data.get('gender') == '1' %}selected{% endif %}>Male (1)</option>
-            </select>
+        <form action="/predict" method="POST">
+            <div class="form-grid">
+                {% for feature in features %}
+                <div class="input-group {% if loop.last and loop.index % 2 != 0 %}full-width{% endif %}">
+                    <label for="{{ feature }}">{{ feature }}</label>
+                    {% if feature in categorical_opts %}
+                        <select name="{{ feature }}" id="{{ feature }}" required>
+                            {% for option in categorical_opts[feature] %}
+                                <option value="{{ option }}" {% if form_data and form_data.get(feature) == option %}selected{% endif %}>
+                                    {{ option }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    {% else %}
+                        <input type="number" step="any" name="{{ feature }}" id="{{ feature }}" 
+                               placeholder="Enter {{ feature }}" 
+                               value="{{ form_data.get(feature, '') if form_data else '' }}" required>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="submit-btn">Run Prediction</button>
+        </form>
+
+        {% if prediction is not none %}
+        <div class="result-card">
+            <h3>Prediction Output</h3>
+            <div class="value">{{ prediction }}</div>
         </div>
+        {% endif %}
 
-        <div class="form-group">
-            <label for="region">Region Code</label>
-            <input type="number" id="region" name="region" placeholder="e.g. 0, 1, 2..." required value="{{ form_data.get('region', '') }}">
+        {% if error %}
+        <div class="error-card">
+            {{ error }}
         </div>
-
-        <div class="form-group">
-            <label for="occupation">Occupation Code</label>
-            <input type="number" id="occupation" name="occupation" placeholder="e.g. 0, 1, 2..." required value="{{ form_data.get('occupation', '') }}">
-        </div>
-
-        <div class="form-group">
-            <label for="income">Income</label>
-            <input type="number" step="any" id="income" name="income" placeholder="e.g. 50000" required value="{{ form_data.get('income', '') }}">
-        </div>
-
-        <button type="submit" class="btn-submit">Predict Outcome</button>
-    </form>
-
-    {% if prediction %}
-        <div class="result-box animate__animated animate__zoomIn pulse {% if prediction == 'yes' %}result-yes{% else %}result-no{% endif %}">
-            Prediction Result: {{ prediction.upper() }}
-        </div>
-    {% endif %}
-</div>
-
+        {% endif %}
+    </div>
 </body>
 </html>
 """
 
 @app.route("/", methods=["GET"])
-def index():
-    return render_template_string(HTML_TEMPLATE, prediction=None, form_data={})
+def home():
+    return render_template_string(
+        HTML_TEMPLATE,
+        features=FEATURE_NAMES,
+        categorical_opts=CATEGORICAL_OPTIONS,
+        prediction=None
+    )
 
 @app.route("/predict", methods=["POST"])
 def predict():
     if model is None:
-        return "Model not loaded properly. Ensure decision_model_.pkl is in the project root.", 500
+        return render_template_string(
+            HTML_TEMPLATE,
+            features=FEATURE_NAMES,
+            categorical_opts=CATEGORICAL_OPTIONS,
+            error="Error: 'decision_model.pkl' could not be loaded on the server.",
+            prediction=None
+        )
 
     try:
-        # Get raw form data
-        age = float(request.form.get("age"))
-        gender = float(request.form.get("gender"))
-        region = float(request.form.get("region"))
-        occupation = float(request.form.get("occupation"))
-        income = float(request.form.get("income"))
+        raw_data = request.form.to_dict()
+        input_values = []
 
-        # Features order according to model: ['Age', 'Gender', 'Region', 'Occupation', 'Income']
-        input_data = np.array([[age, gender, region, occupation, income]])
-        
-        # Predict using loaded pickle decision tree model
-        prediction = model.predict(input_data)[0]
+        for feature in FEATURE_NAMES:
+            val = raw_data.get(feature)
+            # Numeric conversion logic
+            if feature in CATEGORICAL_OPTIONS:
+                try:
+                    val = float(val)
+                except (ValueError, TypeError):
+                    # Deterministic hash encoding fallback if model expects numbers for category strings
+                    val = abs(hash(val)) % 100
+            else:
+                val = float(val)
+            input_values.append(val)
+
+        # Convert to DataFrame / Numpy array as required by Scikit-Learn
+        df_input = pd.DataFrame([input_values], columns=FEATURE_NAMES)
+        prediction_val = model.predict(df_input)[0]
 
         return render_template_string(
-            HTML_TEMPLATE, 
-            prediction=str(prediction), 
-            form_data=request.form
+            HTML_TEMPLATE,
+            features=FEATURE_NAMES,
+            categorical_opts=CATEGORICAL_OPTIONS,
+            prediction=str(prediction_val),
+            form_data=raw_data
         )
 
     except Exception as e:
-        return f"An error occurred during prediction: {str(e)}", 400
+        return render_template_string(
+            HTML_TEMPLATE,
+            features=FEATURE_NAMES,
+            categorical_opts=CATEGORICAL_OPTIONS,
+            error=f"Prediction Error: {str(e)}",
+            form_data=request.form.to_dict(),
+            prediction=None
+        )
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
