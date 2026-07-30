@@ -1,3 +1,5 @@
 Flask
-scikit-learn
+gunicorn
 numpy
+pandas
+scikit-learn
